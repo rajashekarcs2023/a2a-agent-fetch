@@ -140,12 +140,6 @@ Until the adapter is fixed upstream, agents can **emit a final `Message`** with 
 | `simple_a2a_agent/simple_a2a_agent/agentverse_task_result_patch.py` | **Reference** implementation of the adapter-side fix (not imported by default). |
 | `simple_a2a_agent/simple_a2a_agent/executor.py` | Uses **`new_agent_text_message`** for the final reply by default (`A2A_FINAL_TEXT_MESSAGE`), compatible with Agentverse today. |
 
-## Suggested PR title (upstream)
-
-**`fix(a2a): parse message/send Task results in Agentverse /av/chat`**
-
-Include: symptom, link to this doc or a short repro with `DefaultRequestHandler` + task completion, and the **`_text_from_a2a_json_result`**-style extraction.
-
 ---
 
 *Observed with: `uagents-core[a2a]==0.4.5a2`, `a2a-sdk` (protocol 0.3.x), Python 3.12.*
