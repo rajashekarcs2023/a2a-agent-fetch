@@ -1,4 +1,6 @@
 import logging
+import os
+from uuid import uuid4
 
 from typing import TYPE_CHECKING
 
@@ -16,6 +18,7 @@ from a2a.types import (
     TextPart,
     UnsupportedOperationError,
 )
+from a2a.utils import new_agent_text_message
 from a2a.utils.errors import ServerError
 from google.adk.runners import Runner
 from google.genai import types
@@ -39,11 +42,22 @@ class PlannerExecutor(AgentExecutor):
         self._card = card
         self._active_sessions: set[str] = set()
 
+    def _use_fetch_style_final_message(self) -> bool:
+        """Match Fetch innovation-lab-examples: final reply as Message (Agentverse-friendly)."""
+        return os.getenv('A2A_FINAL_TEXT_MESSAGE', '1').lower() not in (
+            '0',
+            'false',
+            'no',
+        )
+
     async def _process_request(
         self,
         new_message: types.Content,
         session_id: str,
         task_updater: TaskUpdater,
+        event_queue: EventQueue,
+        task_id: str | None,
+        context_id: str | None,
     ) -> None:
         session_obj = await self._upsert_session(session_id)
         session_id = session_obj.id
@@ -62,10 +76,24 @@ class PlannerExecutor(AgentExecutor):
                         if (part.text or part.file_data or part.inline_data)
                     ]
                     logger.debug('Yielding final response: %s', parts)
-                    await task_updater.add_artifact(parts)
-                    await task_updater.update_status(
-                        TaskState.completed, final=True
-                    )
+                    if self._use_fetch_style_final_message():
+                        final_text = ''.join(
+                            p.text
+                            for p in (event.content.parts or [])
+                            if getattr(p, 'text', None)
+                        )
+                        await event_queue.enqueue_event(
+                            new_agent_text_message(
+                                final_text or '(empty response)',
+                                context_id=context_id or str(uuid4()),
+                                task_id=task_id or str(uuid4()),
+                            )
+                        )
+                    else:
+                        await task_updater.add_artifact(parts)
+                        await task_updater.update_status(
+                            TaskState.completed, final=True
+                        )
                     break
                 if not event.get_function_calls():
                     logger.debug('Yielding update response')
@@ -106,6 +134,9 @@ class PlannerExecutor(AgentExecutor):
             ),
             context.context_id,
             updater,
+            event_queue,
+            context.task_id,
+            context.context_id,
         )
         logger.debug('[planner] execute exiting')
 
